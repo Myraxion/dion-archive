@@ -12,6 +12,18 @@ pub enum Commands {
     /// Read comment for a target file or directory
     #[command(alias = "view", alias = "cat")]
     Get(GetArgs),
+
+    /// Set or update comment for a target file or directory
+    Set(SetArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SetArgs {
+    /// Target file or directory path
+    pub target_path: String,
+
+    /// Comment text content
+    pub comment: String,
 }
 
 #[derive(clap::Args, Debug)]

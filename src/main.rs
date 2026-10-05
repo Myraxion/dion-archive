@@ -2,10 +2,11 @@ mod cli;
 mod codec;
 mod error;
 mod path;
+mod storage;
 
 use clap::Parser;
-use cli::{Cli, Commands, GetArgs};
-use codec::{decode_comment, IonFile, EOL};
+use cli::{Cli, Commands, GetArgs, SetArgs};
+use codec::{decode_comment, encode_comment, IonFile, EOL};
 use error::DionError;
 use path::resolve_target;
 use serde::Serialize;
@@ -59,9 +60,30 @@ fn handle_get(args: GetArgs) -> Result<(), DionError> {
     Ok(())
 }
 
+fn handle_set(args: SetArgs) -> Result<(), DionError> {
+    let target = resolve_target(&args.target_path)?;
+    let ion_path = target.parent_dir.join("descript.ion");
+
+    let mut ion_file = if ion_path.exists() {
+        let bytes = fs::read(&ion_path).map_err(DionError::Io)?;
+        IonFile::parse(&bytes)?
+    } else {
+        IonFile::new()
+    };
+
+    let encoded_comment = encode_comment(&args.comment);
+    ion_file.update_or_insert(&target.entry_name, &encoded_comment);
+
+    let bytes = ion_file.serialize()?;
+    storage::atomic_write_ion(&target.parent_dir, &bytes)?;
+
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<(), DionError> {
     match cli.command {
         Commands::Get(args) => handle_get(args),
+        Commands::Set(args) => handle_set(args),
     }
 }
 
@@ -69,6 +91,7 @@ fn main() {
     let cli = Cli::parse();
     let quiet = match &cli.command {
         Commands::Get(args) => args.quiet,
+        Commands::Set(_) => false,
     };
 
     if let Err(err) = run(cli) {

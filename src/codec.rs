@@ -21,6 +21,12 @@ pub struct IonFile {
 }
 
 impl IonFile {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
     pub fn parse(bytes: &[u8]) -> Result<Self, DionError> {
         if !bytes.starts_with(TC_HEADER) {
             return Err(DionError::InvalidHeader);
@@ -30,13 +36,24 @@ impl IonFile {
         let text = std::str::from_utf8(body).map_err(|_| DionError::InvalidUtf8)?;
 
         let mut entries = Vec::new();
-        for line in text.lines() {
+        let mut seen_names = std::collections::HashSet::new();
+
+        for (idx, line) in text.lines().enumerate() {
+            let line_no = idx + 2;
             let trimmed = line.trim_end_matches(['\r', '\n']);
             if trimmed.is_empty() {
                 continue;
             }
 
-            let entry = parse_entry_line(trimmed)?;
+            let entry = parse_entry_line(trimmed)
+                .map_err(|e| DionError::MalformedEntry(format!("line {line_no}: {e}")))?;
+            let lower_name = entry.entry_name.to_lowercase();
+            if !seen_names.insert(lower_name) {
+                return Err(DionError::MalformedEntry(format!(
+                    "line {line_no}: duplicate case-insensitive entry: {}",
+                    entry.entry_name
+                )));
+            }
             entries.push(entry);
         }
 
@@ -48,6 +65,31 @@ impl IonFile {
         self.entries
             .iter()
             .find(|e| e.entry_name.to_lowercase() == target_lower)
+    }
+
+    pub fn update_or_insert(&mut self, entry_name: &str, raw_comment: &str) {
+        let target_lower = entry_name.to_lowercase();
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.entry_name.to_lowercase() == target_lower)
+        {
+            existing.raw_comment = raw_comment.to_string();
+        } else {
+            self.entries.push(IonEntry {
+                entry_name: entry_name.to_string(),
+                raw_comment: raw_comment.to_string(),
+            });
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, DionError> {
+        let mut bytes = Vec::from(TC_HEADER);
+        for entry in &self.entries {
+            let line = format_entry_line(&entry.entry_name, &entry.raw_comment)?;
+            bytes.extend_from_slice(line.as_bytes());
+        }
+        Ok(bytes)
     }
 }
 
@@ -94,6 +136,61 @@ pub fn parse_entry_line(line: &str) -> Result<IonEntry, DionError> {
             raw_comment: String::new(),
         })
     }
+}
+
+pub fn format_entry_line(entry_name: &str, raw_comment: &str) -> Result<String, DionError> {
+    let mut line = String::new();
+    if entry_name.contains(' ') {
+        line.push('"');
+        line.push_str(entry_name);
+        line.push('"');
+    } else {
+        line.push_str(entry_name);
+    }
+    line.push(' ');
+    line.push_str(raw_comment);
+    line.push_str("\r\n");
+
+    if line.as_bytes().len() > 4096 {
+        return Err(DionError::LineTooLong(
+            entry_name.to_string(),
+            line.as_bytes().len(),
+        ));
+    }
+    Ok(line)
+}
+
+pub fn encode_comment(comment: &str) -> String {
+    if !comment.contains(['\r', '\n']) {
+        return comment.to_string();
+    }
+
+    let mut encoded = String::new();
+    let mut chars = comment.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => {
+                encoded.push('\\');
+                encoded.push('\\');
+            }
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                encoded.push('\\');
+                encoded.push('n');
+            }
+            '\n' => {
+                encoded.push('\\');
+                encoded.push('n');
+            }
+            other => {
+                encoded.push(other);
+            }
+        }
+    }
+    encoded.push_str(TC_TAIL);
+    encoded
 }
 
 pub fn decode_comment<'a>(raw: &'a str) -> Cow<'a, str> {
@@ -161,5 +258,37 @@ mod tests {
     fn test_parse_invalid_header() {
         let res = IonFile::parse(b"invalid header");
         assert!(matches!(res, Err(DionError::InvalidHeader)));
+    }
+
+    #[test]
+    fn test_parse_duplicate_entry_error() {
+        let mut content = Vec::from(TC_HEADER);
+        content.extend_from_slice(b"test.txt first\r\nTEST.TXT second\r\n");
+        let res = IonFile::parse(&content);
+        assert!(matches!(res, Err(DionError::MalformedEntry(_))));
+    }
+
+    #[test]
+    fn test_encode_and_roundtrip_single_and_multi_line() {
+        let single = "这是一个单行文本\\带有反斜杠";
+        assert_eq!(encode_comment(single), single);
+
+        let multi = "第一行\\带有反斜杠\r\n第二行";
+        let encoded = encode_comment(multi);
+        assert!(encoded.ends_with(TC_TAIL));
+        let decoded = decode_comment(&encoded);
+        assert_eq!(decoded, format!("第一行\\带有反斜杠{EOL}第二行"));
+    }
+
+    #[test]
+    fn test_update_or_insert_preserves_order() {
+        let mut ion = IonFile::new();
+        ion.update_or_insert("first.txt", "c1");
+        ion.update_or_insert("second.txt", "c2");
+        ion.update_or_insert("FIRST.TXT", "c1_updated");
+
+        assert_eq!(ion.entries.len(), 2);
+        assert_eq!(ion.entries[0].raw_comment, "c1_updated");
+        assert_eq!(ion.entries[1].raw_comment, "c2");
     }
 }

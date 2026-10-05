@@ -19,6 +19,9 @@ pub enum DionError {
 
     #[error("invalid path: {0}")]
     InvalidPath(String),
+
+    #[error("line exceeds 4096 bytes limit for '{0}': {1} bytes")]
+    LineTooLong(String, usize),
 }
 
 impl DionError {
