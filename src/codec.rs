@@ -83,6 +83,24 @@ impl IonFile {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn remove(&mut self, target_name: &str) -> bool {
+        let target_lower = target_name.to_lowercase();
+        if let Some(pos) = self
+            .entries
+            .iter()
+            .position(|e| e.entry_name.to_lowercase() == target_lower)
+        {
+            self.entries.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn serialize(&self) -> Result<Vec<u8>, DionError> {
         let mut bytes = Vec::from(TC_HEADER);
         for entry in &self.entries {
@@ -290,5 +308,28 @@ mod tests {
         assert_eq!(ion.entries.len(), 2);
         assert_eq!(ion.entries[0].raw_comment, "c1_updated");
         assert_eq!(ion.entries[1].raw_comment, "c2");
+    }
+
+    #[test]
+    fn test_remove_and_is_empty() {
+        let mut ion = IonFile::new();
+        assert!(ion.is_empty());
+
+        ion.update_or_insert("first.txt", "c1");
+        ion.update_or_insert("second.txt", "c2");
+        assert!(!ion.is_empty());
+
+        // 大小写不敏感删除
+        assert!(ion.remove("FIRST.TXT"));
+        assert_eq!(ion.entries.len(), 1);
+        assert_eq!(ion.entries[0].entry_name, "second.txt");
+
+        // 删除不存在的条目返回 false
+        assert!(!ion.remove("nonexistent.txt"));
+        assert_eq!(ion.entries.len(), 1);
+
+        // 删除最后一个条目后变为 empty
+        assert!(ion.remove("second.txt"));
+        assert!(ion.is_empty());
     }
 }

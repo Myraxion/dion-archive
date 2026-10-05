@@ -15,6 +15,16 @@ pub enum Commands {
 
     /// Set or update comment for a target file or directory
     Set(SetArgs),
+
+    /// Remove comment for a target file or directory
+    #[command(alias = "rm", alias = "del")]
+    Unset(UnsetArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct UnsetArgs {
+    /// Target file or directory path
+    pub target_path: String,
 }
 
 #[derive(clap::Args, Debug)]

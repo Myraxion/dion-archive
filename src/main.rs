@@ -5,7 +5,7 @@ mod path;
 mod storage;
 
 use clap::Parser;
-use cli::{Cli, Commands, GetArgs, SetArgs};
+use cli::{Cli, Commands, GetArgs, SetArgs, UnsetArgs};
 use codec::{decode_comment, encode_comment, IonFile, EOL};
 use error::DionError;
 use path::resolve_target;
@@ -61,6 +61,12 @@ fn handle_get(args: GetArgs) -> Result<(), DionError> {
 }
 
 fn handle_set(args: SetArgs) -> Result<(), DionError> {
+    if args.comment.trim().is_empty() {
+        return handle_unset(UnsetArgs {
+            target_path: args.target_path,
+        });
+    }
+
     let target = resolve_target(&args.target_path)?;
     let ion_path = target.parent_dir.join("descript.ion");
 
@@ -80,10 +86,34 @@ fn handle_set(args: SetArgs) -> Result<(), DionError> {
     Ok(())
 }
 
+fn handle_unset(args: UnsetArgs) -> Result<(), DionError> {
+    let target = resolve_target(&args.target_path)?;
+    let ion_path = target.parent_dir.join("descript.ion");
+
+    if !ion_path.exists() {
+        return Ok(());
+    }
+
+    let bytes = fs::read(&ion_path).map_err(DionError::Io)?;
+    let mut ion_file = IonFile::parse(&bytes)?;
+
+    let removed = ion_file.remove(&target.entry_name);
+
+    if ion_file.is_empty() {
+        fs::remove_file(&ion_path).map_err(DionError::Io)?;
+    } else if removed {
+        let bytes = ion_file.serialize()?;
+        storage::atomic_write_ion(&target.parent_dir, &bytes)?;
+    }
+
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<(), DionError> {
     match cli.command {
         Commands::Get(args) => handle_get(args),
         Commands::Set(args) => handle_set(args),
+        Commands::Unset(args) => handle_unset(args),
     }
 }
 
@@ -91,7 +121,7 @@ fn main() {
     let cli = Cli::parse();
     let quiet = match &cli.command {
         Commands::Get(args) => args.quiet,
-        Commands::Set(_) => false,
+        Commands::Set(_) | Commands::Unset(_) => false,
     };
 
     if let Err(err) = run(cli) {
