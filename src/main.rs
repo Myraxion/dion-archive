@@ -90,17 +90,17 @@ fn handle_unset(args: UnsetArgs) -> Result<(), DionError> {
     let target = resolve_target(&args.target_path)?;
     let ion_path = target.parent_dir.join("descript.ion");
 
-    if !ion_path.exists() {
-        return Ok(());
-    }
-
-    let bytes = fs::read(&ion_path).map_err(DionError::Io)?;
+    let bytes = match fs::read(&ion_path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(DionError::Io(e)),
+    };
     let mut ion_file = IonFile::parse(&bytes)?;
 
     let removed = ion_file.remove(&target.entry_name);
 
     if ion_file.is_empty() {
-        fs::remove_file(&ion_path).map_err(DionError::Io)?;
+        storage::remove_ion(&target.parent_dir)?;
     } else if removed {
         let bytes = ion_file.serialize()?;
         storage::atomic_write_ion(&target.parent_dir, &bytes)?;

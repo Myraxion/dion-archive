@@ -141,3 +141,13 @@ pub fn atomic_write_ion(parent_dir: &Path, content: &[u8]) -> Result<(), DionErr
 
     write_result
 }
+
+pub fn remove_ion(parent_dir: &Path) -> Result<(), DionError> {
+    let target_path = parent_dir.join("descript.ion");
+    match fs::remove_file(&target_path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(DionError::Io(e)),
+    }
+}
+

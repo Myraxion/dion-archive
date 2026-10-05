@@ -60,21 +60,26 @@ impl IonFile {
         Ok(Self { entries })
     }
 
-    pub fn find_entry(&self, target_name: &str) -> Option<&IonEntry> {
-        let target_lower = target_name.to_lowercase();
-        self.entries
-            .iter()
-            .find(|e| e.entry_name.to_lowercase() == target_lower)
+    fn find_index(&self, entry_name: &str) -> Option<usize> {
+        if entry_name.is_ascii() {
+            self.entries
+                .iter()
+                .position(|e| e.entry_name.eq_ignore_ascii_case(entry_name))
+        } else {
+            let target_lower = entry_name.to_lowercase();
+            self.entries
+                .iter()
+                .position(|e| e.entry_name.to_lowercase() == target_lower)
+        }
+    }
+
+    pub fn find_entry(&self, entry_name: &str) -> Option<&IonEntry> {
+        self.find_index(entry_name).map(|idx| &self.entries[idx])
     }
 
     pub fn update_or_insert(&mut self, entry_name: &str, raw_comment: &str) {
-        let target_lower = entry_name.to_lowercase();
-        if let Some(existing) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.entry_name.to_lowercase() == target_lower)
-        {
-            existing.raw_comment = raw_comment.to_string();
+        if let Some(idx) = self.find_index(entry_name) {
+            self.entries[idx].raw_comment = raw_comment.to_string();
         } else {
             self.entries.push(IonEntry {
                 entry_name: entry_name.to_string(),
@@ -87,13 +92,8 @@ impl IonFile {
         self.entries.is_empty()
     }
 
-    pub fn remove(&mut self, target_name: &str) -> bool {
-        let target_lower = target_name.to_lowercase();
-        if let Some(pos) = self
-            .entries
-            .iter()
-            .position(|e| e.entry_name.to_lowercase() == target_lower)
-        {
+    pub fn remove(&mut self, entry_name: &str) -> bool {
+        if let Some(pos) = self.find_index(entry_name) {
             self.entries.remove(pos);
             true
         } else {
