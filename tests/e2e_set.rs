@@ -325,3 +325,340 @@ fn test_set_missing_args_exit_code_2() {
     let mut cmd2 = Command::cargo_bin("dion").unwrap();
     cmd2.arg("set").arg("target.txt").assert().code(2);
 }
+
+#[test]
+fn test_set_stdin_via_dash_multi_line() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("pipe_target.txt");
+    fs::write(&target, "content").unwrap();
+
+    let comment_payload = "第一行管道\r\n第二行管道\r\n第三行管道";
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("pipe_target.txt")
+        .arg("-")
+        .write_stdin(comment_payload)
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 验证 get 读取无损
+    let mut get_cmd = Command::cargo_bin("dion").unwrap();
+    get_cmd
+        .current_dir(dir.path())
+        .arg("get")
+        .arg("pipe_target.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff(format!("{comment_payload}\r\n")));
+}
+
+#[test]
+fn test_set_stdin_via_flag_lossless_special_chars_and_whitespace() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("special.txt");
+    fs::write(&target, "content").unwrap();
+
+    // 包含首尾空白、换行、双引号、反斜杠、Unicode 与 Emoji
+    let comment_payload = "  \r\n\"Quotes\" & \\Backslash\\ 🚀 特殊符号 🎉\r\n  ";
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("special.txt")
+        .arg("--stdin")
+        .write_stdin(comment_payload)
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 验证 get 读取完全保留原始首尾空白与换行结构
+    let mut get_cmd = Command::cargo_bin("dion").unwrap();
+    get_cmd
+        .current_dir(dir.path())
+        .arg("get")
+        .arg("special.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff(format!("{comment_payload}\r\n")));
+}
+
+#[test]
+fn test_set_stdin_empty_or_whitespace_triggers_unset() {
+    let dir = tempdir().unwrap();
+    let ion_path = dir.path().join("descript.ion");
+
+    // 先通过常规命令设置备注
+    let mut setup_cmd = Command::cargo_bin("dion").unwrap();
+    setup_cmd
+        .current_dir(dir.path())
+        .arg("set")
+        .arg("target.txt")
+        .arg("初始备注")
+        .assert()
+        .success();
+
+    assert!(ion_path.exists());
+
+    // 通过 stdin 传入全空白
+    let mut clear_cmd = Command::cargo_bin("dion").unwrap();
+    clear_cmd
+        .current_dir(dir.path())
+        .arg("set")
+        .arg("target.txt")
+        .arg("--stdin")
+        .write_stdin("   \r\n\t  ")
+        .assert()
+        .success();
+
+    // 验证条目已被 unset，文件自动删除
+    assert!(!ion_path.exists());
+}
+
+#[test]
+fn test_set_conflicting_sources_exit_code_2() {
+    let mut cmd1 = Command::cargo_bin("dion").unwrap();
+    cmd1.arg("set")
+        .arg("file.txt")
+        .arg("direct_comment")
+        .arg("--stdin")
+        .assert()
+        .code(2);
+
+    let mut cmd2 = Command::cargo_bin("dion").unwrap();
+    cmd2.arg("set")
+        .arg("file.txt")
+        .arg("-")
+        .arg("--stdin")
+        .assert()
+        .code(2);
+
+    let mut cmd3 = Command::cargo_bin("dion").unwrap();
+    cmd3.arg("set")
+        .arg("file.txt")
+        .arg("direct_comment")
+        .arg("-e")
+        .assert()
+        .code(2);
+
+    let mut cmd4 = Command::cargo_bin("dion").unwrap();
+    cmd4.arg("set")
+        .arg("file.txt")
+        .arg("-")
+        .arg("-e")
+        .assert()
+        .code(2);
+
+    let mut cmd5 = Command::cargo_bin("dion").unwrap();
+    cmd5.arg("set")
+        .arg("file.txt")
+        .arg("--stdin")
+        .arg("-e")
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn test_set_editor_non_tty_rejected_exit_code_2() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("editor_target.txt");
+    fs::write(&target, "content").unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("editor_target.txt")
+        .arg("-e")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("TTY"));
+}
+
+#[test]
+fn test_set_editor_non_tty_rejected_even_if_ion_corrupt_exit_code_2() {
+    let dir = tempdir().unwrap();
+    let ion_path = dir.path().join("descript.ion");
+    fs::write(&ion_path, b"corrupted header without BOM\r\n").unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("file.txt")
+        .arg("-e")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("TTY"));
+}
+
+#[test]
+fn test_set_editor_interactive_flow_via_mock_editor() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("file.txt");
+    fs::write(&target, "file content").unwrap();
+
+    // 创建一个 mock editor 脚本 (Windows .bat 批处理)
+    // 脚本功能：接收临时文件路径作为第 1 个参数，向其写入指定内容
+    let mock_editor = dir.path().join("mock_editor.bat");
+    fs::write(
+        &mock_editor,
+        "@echo off\r\necho 编辑器写入的第一行> \"%~1\"\r\necho 编辑器写入的第二行>> \"%~1\"\r\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .env("DION_FORCE_TTY", "1")
+        .env("EDITOR", mock_editor.to_str().unwrap())
+        .arg("set")
+        .arg("file.txt")
+        .arg("-e")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 验证 get 能还原编辑器写入的多行内容（含末尾保留换行）
+    let mut get_cmd = Command::cargo_bin("dion").unwrap();
+    get_cmd
+        .current_dir(dir.path())
+        .arg("get")
+        .arg("file.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("编辑器写入的第一行\r\n编辑器写入的第二行\r\n\r\n"));
+}
+
+#[test]
+fn test_set_editor_prefills_existing_comment_and_updates() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("file.txt");
+    fs::write(&target, "content").unwrap();
+
+    // 1. 设置初始备注
+    let mut init_cmd = Command::cargo_bin("dion").unwrap();
+    init_cmd
+        .current_dir(dir.path())
+        .arg("set")
+        .arg("file.txt")
+        .arg("初始已有备注")
+        .assert()
+        .success();
+
+    // 2. 创建 mock editor，在已有内容后追加文本
+    let mock_editor = dir.path().join("append_editor.bat");
+    fs::write(
+        &mock_editor,
+        "@echo off\r\necho.>> \"%~1\"\r\necho 追加的第二行>> \"%~1\"\r\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .env("DION_FORCE_TTY", "1")
+        .env("EDITOR", mock_editor.to_str().unwrap())
+        .arg("set")
+        .arg("file.txt")
+        .arg("-e")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 3. 验证保留了原备注并成功合并追加内容
+    let mut get_cmd = Command::cargo_bin("dion").unwrap();
+    get_cmd
+        .current_dir(dir.path())
+        .arg("get")
+        .arg("file.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("初始已有备注\r\n追加的第二行\r\n\r\n"));
+}
+
+#[test]
+fn test_set_editor_clearing_content_triggers_unset() {
+    let dir = tempdir().unwrap();
+    let ion_path = dir.path().join("descript.ion");
+
+    // 1. 设置初始备注
+    let mut init_cmd = Command::cargo_bin("dion").unwrap();
+    init_cmd
+        .current_dir(dir.path())
+        .arg("set")
+        .arg("file.txt")
+        .arg("即将被清空的备注")
+        .assert()
+        .success();
+    assert!(ion_path.exists());
+
+    // 2. 创建清空临时文件的 mock editor
+    let mock_editor = dir.path().join("clear_editor.bat");
+    fs::write(&mock_editor, "@echo off\r\ntype nul > \"%~1\"\r\n").unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .env("DION_FORCE_TTY", "1")
+        .env("EDITOR", mock_editor.to_str().unwrap())
+        .arg("set")
+        .arg("file.txt")
+        .arg("-e")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 3. 验证文件被自动清理 (unset)
+    assert!(!ion_path.exists());
+}
+
+#[test]
+fn test_set_editor_does_not_lock_descript_ion_during_session() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("file.txt");
+    fs::write(&target, "file content").unwrap();
+
+    // 1. 初始化 descript.ion
+    let ion_path = dir.path().join("descript.ion");
+    let mut initial = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
+    initial.extend_from_slice(b"file.txt original\r\n");
+    fs::write(&ion_path, initial).unwrap();
+
+    // 2. 创建 mock editor：在会话运行期间，外部可以直接读写目标 descript.ion
+    let mock_editor = dir.path().join("concurrency_check_editor.bat");
+    fs::write(
+        &mock_editor,
+        "@echo off\r\necho other.txt external_comment>> descript.ion\r\necho updated_content> \"%~1\"\r\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .env("DION_FORCE_TTY", "1")
+        .env("EDITOR", mock_editor.to_str().unwrap())
+        .arg("set")
+        .arg("file.txt")
+        .arg("-e")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // 3. 验证外部修改与编辑器修改均安全保留
+    let mut get1 = Command::cargo_bin("dion").unwrap();
+    get1.current_dir(dir.path())
+        .arg("get")
+        .arg("other.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("external_comment\r\n"));
+
+    let mut get2 = Command::cargo_bin("dion").unwrap();
+    get2.current_dir(dir.path())
+        .arg("get")
+        .arg("file.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("updated_content\r\n\r\n"));
+}
+
+
+
+

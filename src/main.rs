@@ -1,11 +1,12 @@
 mod cli;
 mod codec;
 mod error;
+mod input;
 mod path;
 mod storage;
 
 use clap::Parser;
-use cli::{Cli, Commands, GetArgs, SetArgs, UnsetArgs};
+use cli::{resolve_set_input_source, Cli, Commands, GetArgs, SetArgs, SetInputSource, UnsetArgs};
 use codec::{decode_comment, encode_comment, IonFile, EOL};
 use error::DionError;
 use path::resolve_target;
@@ -60,24 +61,56 @@ fn handle_get(args: GetArgs) -> Result<(), DionError> {
     Ok(())
 }
 
+fn load_or_init_ion(path: &std::path::Path) -> Result<IonFile, DionError> {
+    if path.exists() {
+        let bytes = fs::read(path).map_err(DionError::Io)?;
+        IonFile::parse(&bytes)
+    } else {
+        Ok(IonFile::new())
+    }
+}
+
 fn handle_set(args: SetArgs) -> Result<(), DionError> {
-    if args.comment.trim().is_empty() {
+    let source = resolve_set_input_source(
+        args.comment.as_deref(),
+        args.stdin,
+        args.edit,
+    )?;
+
+    let target = resolve_target(&args.target_path)?;
+    let ion_path = target.parent_dir.join("descript.ion");
+
+    let comment = match source {
+        SetInputSource::Direct(s) => s,
+        SetInputSource::Stdin => input::read_comment_from_reader(std::io::stdin())?,
+        SetInputSource::Editor => {
+            if !input::is_tty() {
+                return Err(DionError::Usage(
+                    "interactive editor (-e) requires a TTY terminal".to_string(),
+                ));
+            }
+            let initial = if ion_path.exists() {
+                let ion_file = load_or_init_ion(&ion_path)?;
+                ion_file
+                    .find_entry(&target.entry_name)
+                    .map(|entry| decode_comment(&entry.raw_comment).into_owned())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            input::run_editor(&initial)?
+        }
+    };
+
+    if comment.trim().is_empty() {
         return handle_unset(UnsetArgs {
             target_path: args.target_path,
         });
     }
 
-    let target = resolve_target(&args.target_path)?;
-    let ion_path = target.parent_dir.join("descript.ion");
+    let mut ion_file = load_or_init_ion(&ion_path)?;
 
-    let mut ion_file = if ion_path.exists() {
-        let bytes = fs::read(&ion_path).map_err(DionError::Io)?;
-        IonFile::parse(&bytes)?
-    } else {
-        IonFile::new()
-    };
-
-    let encoded_comment = encode_comment(&args.comment);
+    let encoded_comment = encode_comment(&comment);
     ion_file.update_or_insert(&target.entry_name, &encoded_comment);
 
     let bytes = ion_file.serialize()?;
