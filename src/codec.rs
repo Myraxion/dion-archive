@@ -55,8 +55,13 @@ impl IonFile {
                 continue;
             }
 
+            let physical_len = trimmed.len() + 2;
             let entry = parse_entry_line(trimmed)
                 .map_err(|e| DionError::MalformedEntry(format!("line {line_no}: {e}")))?;
+
+            if physical_len > 4096 {
+                return Err(DionError::LineTooLong(entry.entry_name, physical_len));
+            }
             let lower_name = entry.entry_name.to_lowercase();
             if !seen_names.insert(lower_name) {
                 return Err(DionError::MalformedEntry(format!(

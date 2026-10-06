@@ -312,3 +312,21 @@ fn test_get_fixture_real_tc_samples() {
             "hhhh\r\n😄\r\n\\n\r\n/n\r\n\\\\n\r\n😢\r\n",
         ));
 }
+
+#[test]
+fn test_get_line_too_long_rejected_exit_code_3() {
+    let dir = tempdir().unwrap();
+    let ion_path = dir.path().join("descript.ion");
+    let mut content = Vec::from(TC_HEADER);
+    let long_line = format!("long.txt {}\r\n", "A".repeat(4100));
+    content.extend_from_slice(long_line.as_bytes());
+    fs::write(&ion_path, content).unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("get")
+        .arg("long.txt")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("exceeds 4096 bytes limit"));
+}
