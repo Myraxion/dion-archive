@@ -309,7 +309,6 @@ fn test_set_relative_path_lexical() {
     fs::create_dir(&sub).unwrap();
     fs::write(sub.join("item.txt"), "content").unwrap();
 
-
     let mut cmd = Command::cargo_bin("dion").unwrap();
     cmd.current_dir(dir.path())
         .arg("set")
@@ -505,7 +504,6 @@ fn test_set_editor_non_tty_rejected_even_if_ion_corrupt_exit_code_2() {
     let ion_path = dir.path().join("descript.ion");
     fs::write(&ion_path, b"corrupted header without BOM\r\n").unwrap();
 
-
     let mut cmd = Command::cargo_bin("dion").unwrap();
     cmd.current_dir(dir.path())
         .arg("set")
@@ -697,7 +695,9 @@ fn test_set_nonexistent_target_rejected_exit_code_1() {
         .arg("some comment")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("target not found: 'nonexistent_file.txt'"));
+        .stderr(predicate::str::contains(
+            "target not found: 'nonexistent_file.txt'",
+        ));
 
     // 验证未产生任何 descript.ion 文件
     let ion_path = dir.path().join("descript.ion");
@@ -716,7 +716,9 @@ fn test_set_empty_comment_on_nonexistent_target_rejected_exit_code_1() {
         .arg("")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("target not found: 'ghost_file.txt'"));
+        .stderr(predicate::str::contains(
+            "target not found: 'ghost_file.txt'",
+        ));
 
     let ion_path = dir.path().join("descript.ion");
     assert!(!ion_path.exists());
@@ -734,7 +736,9 @@ fn test_set_stdin_empty_on_nonexistent_target_rejected_exit_code_1() {
         .write_stdin("   \r\n")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("target not found: 'ghost_pipe.txt'"));
+        .stderr(predicate::str::contains(
+            "target not found: 'ghost_pipe.txt'",
+        ));
 }
 
 #[test]
@@ -759,7 +763,9 @@ fn test_set_editor_on_nonexistent_target_rejected_exit_code_1() {
         .arg("-e")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("target not found: 'ghost_editor.txt'"));
+        .stderr(predicate::str::contains(
+            "target not found: 'ghost_editor.txt'",
+        ));
 
     // 验证编辑器根本没有被拉起
     assert!(!sentinel.exists());
@@ -798,9 +804,7 @@ fn test_set_existing_directory_and_nonexistent_parent_dir() {
         .arg("备注")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("target not found: 'no_such_folder/file.txt'"));
+        .stderr(predicate::str::contains(
+            "target not found: 'no_such_folder/file.txt'",
+        ));
 }
-
-
-
-
