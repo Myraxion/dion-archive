@@ -81,6 +81,15 @@ fn handle_set(args: SetArgs) -> Result<(), DionError> {
     let source = resolve_set_input_source(args.comment.as_deref(), args.stdin, args.edit)?;
 
     let target = resolve_target(&args.target_path)?;
+    let target_disk_path = target.parent_dir.join(&target.entry_name);
+    match fs::symlink_metadata(&target_disk_path) {
+        Ok(_) => {}
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            return Err(DionError::TargetNotFound(args.target_path));
+        }
+        Err(e) => return Err(DionError::Io(e)),
+    }
+
     let ion_path = target.parent_dir.join("descript.ion");
 
     let comment = match source {

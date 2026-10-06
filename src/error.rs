@@ -11,6 +11,10 @@ pub enum DionError {
     #[error("comment not found for '{0}'")]
     NotFound(String),
 
+    /// 目标文件或目录在文件系统中不存在（退出码 1）
+    #[error("target not found: '{0}'")]
+    TargetNotFound(String),
+
     /// `descript.ion` 文件缺少 Total Commander UTF-8 规范头 `0xEFBBBF0D0A`
     #[error("invalid header: descript.ion must begin with 0xEFBBBF0D0A")]
     InvalidHeader,
@@ -49,7 +53,7 @@ impl DionError {
     #[must_use]
     pub fn exit_code(&self) -> i32 {
         match self {
-            DionError::NotFound(_) => 1,
+            DionError::NotFound(_) | DionError::TargetNotFound(_) => 1,
             DionError::Usage(_) => 2,
             _ => 3,
         }

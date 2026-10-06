@@ -57,7 +57,7 @@ _Avoid_: Auto-sorting, Random reordering
 _Avoid_: Strict unset, Failing delete
 
 **Exit Code Contract**:
-严格约定的四级退出码体系（0: 成功, 1: 未找到, 2: 用法错误, 3: 执行或格式错误），提供完全确定的自动化控制流支持。
+严格约定的四级退出码体系（0: 成功或幂等成功, 1: 目标物理实体或备注未找到, 2: 用法错误, 3: 执行或格式错误），提供完全确定的自动化控制流支持。
 _Avoid_: Generic exit code, Binary exit code
 
 **Universal JSON Contract**:
@@ -68,10 +68,15 @@ _Avoid_: Ad-hoc JSON, Text parsing
 对目标路径仅执行纯字面消除 `.`/`..` 的层级解析，不跟随符号链接与 Junction 展开到物理目标，确保备注始终记录在直接上级目录。
 _Avoid_: Canonical path, Symlink traversal
 
+**Target Existence Validation**:
+在执行写入操作前，通过无穿透元数据检查（`symlink_metadata`）确认 Target Path 对应的条目在父目录文件系统中实际存在的门禁机制。
+_Avoid_: File existence check, Physical probing
+
+**Orphan Entry**:
+记录在 `descript.ion` 中，但在对应父目录文件系统中已无物理实体（文件、目录、符号链接）与之对应的历史残留备注项。
+_Avoid_: Ghost entry, Dead record, Dangling comment
+
 **Fail-Safe Validation**:
 检测到现有 `descript.ion` 损坏、非法编码或存在冲突时，拒绝写入并以退出码 3 终止，杜绝静默破坏用户数据的原则。
 _Avoid_: Silent fix, Force write
-
-
-
 

@@ -51,6 +51,7 @@ fn test_set_single_line_comment_and_hidden_attribute() {
 #[test]
 fn test_set_multi_line_comment_compliance_and_lossless_roundtrip() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("multi target.txt"), "content").unwrap();
     let comment_payload = "第一行\r\n第二行\\带反斜杠\r\n第三行";
 
     let mut cmd = Command::cargo_bin("dion").unwrap();
@@ -101,6 +102,7 @@ fn test_set_multi_line_comment_compliance_and_lossless_roundtrip() {
 #[test]
 fn test_set_single_line_with_literal_escapes() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("script.bat"), "@echo off").unwrap();
     // 包含字面量反斜杠与 \n，但没有真实换行，必须作为单行处理且不被隐式转义
     let literal_comment = r"C:\Windows\System32\n_literal";
 
@@ -138,6 +140,10 @@ fn test_set_single_line_with_literal_escapes() {
 #[test]
 fn test_set_case_insensitive_in_place_update_and_order_preservation() {
     let dir = tempdir().unwrap();
+    for f in ["alpha.txt", "beta.txt", "gamma.txt", "delta.txt"] {
+        fs::write(dir.path().join(f), "content").unwrap();
+    }
+
     let ion_path = dir.path().join("descript.ion");
     let mut initial = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     initial.extend_from_slice(b"alpha.txt \xE5\xA4\x87\xE6\xB3\xA81\r\n"); // 备注1
@@ -210,6 +216,7 @@ fn test_set_case_insensitive_in_place_update_and_order_preservation() {
 #[test]
 fn test_set_exceeding_4096_bytes_rejected_with_exit_code_3() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("huge.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
     let initial_content =
         b"\xEF\xBB\xBF\r\nexisting.txt \xE5\x8E\x9F\xE5\xA7\x8B\xE5\xA4\x87\xE6\xB3\xA8\r\n";
@@ -235,6 +242,7 @@ fn test_set_exceeding_4096_bytes_rejected_with_exit_code_3() {
 #[test]
 fn test_set_malformed_header_rejected_exit_code_3() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("new.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
     let corrupt_content = b"ANSI header without BOM\r\nfile.txt comment\r\n";
     fs::write(&ion_path, corrupt_content).unwrap();
@@ -255,6 +263,7 @@ fn test_set_malformed_header_rejected_exit_code_3() {
 #[test]
 fn test_set_malformed_unclosed_quote_rejected_exit_code_3() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("target.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
     let mut corrupt_content = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     corrupt_content.extend_from_slice(b"\"unclosed name missing quote comment\r\n");
@@ -275,6 +284,7 @@ fn test_set_malformed_unclosed_quote_rejected_exit_code_3() {
 #[test]
 fn test_set_duplicate_case_conflict_rejected_exit_code_3() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("other.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
     let mut corrupt_content = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     corrupt_content.extend_from_slice(b"file.txt c1\r\nFILE.TXT c2\r\n");
@@ -297,6 +307,8 @@ fn test_set_relative_path_lexical() {
     let dir = tempdir().unwrap();
     let sub = dir.path().join("sub_dir");
     fs::create_dir(&sub).unwrap();
+    fs::write(sub.join("item.txt"), "content").unwrap();
+
 
     let mut cmd = Command::cargo_bin("dion").unwrap();
     cmd.current_dir(dir.path())
@@ -397,6 +409,7 @@ fn test_set_stdin_via_flag_lossless_special_chars_and_whitespace() {
 #[test]
 fn test_set_stdin_empty_or_whitespace_triggers_unset() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("target.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
 
     // 先通过常规命令设置备注
@@ -488,8 +501,10 @@ fn test_set_editor_non_tty_rejected_exit_code_2() {
 #[test]
 fn test_set_editor_non_tty_rejected_even_if_ion_corrupt_exit_code_2() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("file.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
     fs::write(&ion_path, b"corrupted header without BOM\r\n").unwrap();
+
 
     let mut cmd = Command::cargo_bin("dion").unwrap();
     cmd.current_dir(dir.path())
@@ -589,6 +604,7 @@ fn test_set_editor_prefills_existing_comment_and_updates() {
 #[test]
 fn test_set_editor_clearing_content_triggers_unset() {
     let dir = tempdir().unwrap();
+    fs::write(dir.path().join("file.txt"), "content").unwrap();
     let ion_path = dir.path().join("descript.ion");
 
     // 1. 设置初始备注
@@ -669,3 +685,122 @@ fn test_set_editor_does_not_lock_descript_ion_during_session() {
         .success()
         .stdout(predicate::str::diff("updated_content\r\n\r\n"));
 }
+
+#[test]
+fn test_set_nonexistent_target_rejected_exit_code_1() {
+    let dir = tempdir().unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("nonexistent_file.txt")
+        .arg("some comment")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("target not found: 'nonexistent_file.txt'"));
+
+    // 验证未产生任何 descript.ion 文件
+    let ion_path = dir.path().join("descript.ion");
+    assert!(!ion_path.exists());
+}
+
+#[test]
+fn test_set_empty_comment_on_nonexistent_target_rejected_exit_code_1() {
+    let dir = tempdir().unwrap();
+
+    // 哪怕传入空字符串备注，也不允许转发 unset，直接拦截
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("ghost_file.txt")
+        .arg("")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("target not found: 'ghost_file.txt'"));
+
+    let ion_path = dir.path().join("descript.ion");
+    assert!(!ion_path.exists());
+}
+
+#[test]
+fn test_set_stdin_empty_on_nonexistent_target_rejected_exit_code_1() {
+    let dir = tempdir().unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .arg("set")
+        .arg("ghost_pipe.txt")
+        .arg("--stdin")
+        .write_stdin("   \r\n")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("target not found: 'ghost_pipe.txt'"));
+}
+
+#[test]
+fn test_set_editor_on_nonexistent_target_rejected_exit_code_1() {
+    let dir = tempdir().unwrap();
+
+    // 创建一个 mock editor 脚本，如果被调用就会生成 sentinel 文件
+    let sentinel = dir.path().join("editor_ran.txt");
+    let mock_editor = dir.path().join("mock_editor.bat");
+    fs::write(
+        &mock_editor,
+        format!("@echo off\r\necho ran > \"{}\"\r\n", sentinel.display()),
+    )
+    .unwrap();
+
+    let mut cmd = Command::cargo_bin("dion").unwrap();
+    cmd.current_dir(dir.path())
+        .env("DION_FORCE_TTY", "1")
+        .env("EDITOR", mock_editor.to_str().unwrap())
+        .arg("set")
+        .arg("ghost_editor.txt")
+        .arg("-e")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("target not found: 'ghost_editor.txt'"));
+
+    // 验证编辑器根本没有被拉起
+    assert!(!sentinel.exists());
+}
+
+#[test]
+fn test_set_existing_directory_and_nonexistent_parent_dir() {
+    let dir = tempdir().unwrap();
+
+    // 1. 对存在的子目录设置备注：应当成功
+    let sub = dir.path().join("my_folder");
+    fs::create_dir(&sub).unwrap();
+
+    let mut cmd1 = Command::cargo_bin("dion").unwrap();
+    cmd1.current_dir(dir.path())
+        .arg("set")
+        .arg("my_folder")
+        .arg("这是一个目录备注")
+        .assert()
+        .success();
+
+    let mut get_cmd = Command::cargo_bin("dion").unwrap();
+    get_cmd
+        .current_dir(dir.path())
+        .arg("get")
+        .arg("my_folder")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("这是一个目录备注\r\n"));
+
+    // 2. 对不存在的父目录下的文件设置备注：应当返回退出码 1
+    let mut cmd2 = Command::cargo_bin("dion").unwrap();
+    cmd2.current_dir(dir.path())
+        .arg("set")
+        .arg("no_such_folder/file.txt")
+        .arg("备注")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("target not found: 'no_such_folder/file.txt'"));
+}
+
+
+
+

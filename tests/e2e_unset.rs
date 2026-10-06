@@ -20,6 +20,7 @@ fn test_unset_existing_entry_success_and_get_fails() {
         .success();
 
     // 再另外设置一个保留文件
+    fs::write(dir.path().join("keep.txt"), "").unwrap();
     let mut set_keep_cmd = Command::cargo_bin("dion").unwrap();
     set_keep_cmd
         .current_dir(dir.path())
@@ -225,6 +226,7 @@ fn test_set_empty_or_whitespace_comment_triggers_unset() {
     let ion_path = dir.path().join("descript.ion");
 
     // 场景 1: 单条目，通过 set "" 移除并清理文件
+    fs::write(dir.path().join("target1.txt"), "").unwrap();
     let mut initial = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     initial.extend_from_slice(b"target1.txt existing comment\r\n");
     fs::write(&ion_path, initial).unwrap();
@@ -244,6 +246,7 @@ fn test_set_empty_or_whitespace_comment_triggers_unset() {
     );
 
     // 场景 2: 多条目，通过 set "   \t  " 移除指定条目，保留其他条目
+    fs::write(dir.path().join("remove_me.txt"), "").unwrap();
     let mut multi = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     multi.extend_from_slice(b"stay.txt stay comment\r\n");
     multi.extend_from_slice(b"remove_me.txt delete comment\r\n");
