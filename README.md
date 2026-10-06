@@ -20,3 +20,11 @@ Dion 是一款轻量、高性能、零外部运行依赖的 Windows 原生命令
 - **TC 标准 UTF-8 兼容**：严格支持 `0xEFBBBF0D0A` 头部、多行转义 `\n`、特殊字符及 `0x04C382` 应用标记。
 - **Agent & 脚本亲和**：支持管道标准输入（`--stdin` / `-`）、确定性四级退出码及纯净输出，支持 `--json`。
 - **可靠与安全**：同目录临时文件原子重命名覆盖，始终保持 Windows `Hidden` 属性，4096 字节单行硬限制校验。
+
+## 许可证 (License)
+
+本项目遵循双重开源许可协议：
+- [MIT 许可证](file:///d:/Workspace/code/dion/LICENSE-MIT) ([`LICENSE-MIT`](file:///d:/Workspace/code/dion/LICENSE-MIT))
+- [Apache 2.0 许可证](file:///d:/Workspace/code/dion/LICENSE-APACHE) ([`LICENSE-APACHE`](file:///d:/Workspace/code/dion/LICENSE-APACHE))
+
+您可以自由选择任一协议进行使用和分发。

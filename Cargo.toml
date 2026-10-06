@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Dion Contributors"]
 description = "Lightweight, high-performance Windows native CLI for Total Commander UTF-8 descript.ion comments"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
