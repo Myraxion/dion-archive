@@ -13,3 +13,8 @@ Canonical 5-role triage vocabulary (`needs-triage`, `needs-info`, `ready-for-age
 ### Domain docs
 
 Single-context layout (`GLOSSARY.md` at root and `docs/adr/`). See `docs/agents/domain.md`.
+
+### Coding standards
+
+Rust implementation standards for Dion (KISS, zero-cost borrowing, thiserror exit codes, Windows contracts). See `CODING_STANDARDS.md`.
+

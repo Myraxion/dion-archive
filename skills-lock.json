@@ -97,12 +97,6 @@
       "skillPath": "skills/engineering/retro/SKILL.md",
       "computedHash": "e63bb774fba4e601edfffc56bbd5c938d76c8faa2dff49456dff3b1e679cd3b6"
     },
-    "rust-best-practices": {
-      "source": "apollographql/skills",
-      "sourceType": "github",
-      "skillPath": "skills/rust-best-practices/SKILL.md",
-      "computedHash": "5f050929b5b62c8c847b75955d7d773be9dc649d03778e6e94cd8db1101fb674"
-    },
     "setup-matt-pocock-skills": {
       "source": "mattpocock/skills",
       "sourceType": "github",
