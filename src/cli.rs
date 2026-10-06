@@ -1,7 +1,15 @@
+//! 命令行接口参数与子命令定义模块。
+//!
+//! 基于 `clap` 定义 CLI 命令树，并提供 `set` 子命令输入渠道唯一性仲裁逻辑。
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "dion", version, about = "Windows native CLI for Total Commander descript.ion")]
+#[command(
+    name = "dion",
+    version,
+    about = "Windows native CLI for Total Commander descript.ion"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -94,9 +102,7 @@ pub fn resolve_set_input_source(
     };
 
     match (positional_source, stdin_source, editor_source) {
-        (Some(src), None, None) => Ok(src),
-        (None, Some(src), None) => Ok(src),
-        (None, None, Some(src)) => Ok(src),
+        (Some(src), None, None) | (None, Some(src), None) | (None, None, Some(src)) => Ok(src),
         (None, None, None) => Err(crate::error::DionError::Usage(
             "missing comment input source: specify a comment argument, '-' or '--stdin', or '-e'".to_string(),
         )),

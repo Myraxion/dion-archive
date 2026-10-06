@@ -1,11 +1,19 @@
-use crate::cli::ListArgs;
-use crate::codec::{decode_comment, IonFile, EOL};
-use crate::error::DionError;
-use serde::Serialize;
+//! 目录与递归列出备注模块。
+//!
+//! 支持单目录扫描及递归目录遍历（不穿透符号链接或 Windows Junction 重解析点），
+//! 并提供终端双列等宽对齐排版及 JSON 输出支持。
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
 
+use serde::Serialize;
+
+use crate::cli::ListArgs;
+use crate::codec::{decode_comment, IonFile, EOL};
+use crate::error::DionError;
+
+/// 列表展示或 JSON 序列化的单项条目模型。
 #[derive(Serialize, Debug)]
 pub struct ListItem {
     pub path: String,
@@ -30,7 +38,9 @@ fn is_wide_char(ch: char) -> bool {
 }
 
 fn display_width(s: &str) -> usize {
-    s.chars().map(|ch| if is_wide_char(ch) { 2 } else { 1 }).sum()
+    s.chars()
+        .map(|ch| if is_wide_char(ch) { 2 } else { 1 })
+        .sum()
 }
 
 fn read_ion_file(dir: &Path) -> Result<Option<IonFile>, DionError> {
@@ -45,7 +55,13 @@ fn read_ion_file(dir: &Path) -> Result<Option<IonFile>, DionError> {
     }
 }
 
-pub fn handle_list(args: ListArgs) -> Result<(), DionError> {
+/// 执行 `list` 命令，展示目标目录（或递归子目录）下的文件备注。
+///
+/// # Errors
+///
+/// - 如果目录路径为符号链接、Junction 或非目录，返回 [`DionError::Usage`]。
+/// - 如果读取文件系统目录失败，返回 [`DionError::Io`]。
+pub fn handle_list(args: &ListArgs) -> Result<(), DionError> {
     let root_path = Path::new(&args.dir);
     let root_meta = fs::symlink_metadata(root_path).map_err(DionError::Io)?;
 
@@ -56,7 +72,7 @@ pub fn handle_list(args: ListArgs) -> Result<(), DionError> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x00000400;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
         if root_meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Err(DionError::Usage(format!(
                 "'{}' is a reparse point",
@@ -66,7 +82,10 @@ pub fn handle_list(args: ListArgs) -> Result<(), DionError> {
     }
 
     if !root_meta.is_dir() {
-        return Err(DionError::Usage(format!("'{}' is not a directory", args.dir)));
+        return Err(DionError::Usage(format!(
+            "'{}' is not a directory",
+            args.dir
+        )));
     }
 
     let mut items: Vec<ListItem> = Vec::new();
@@ -85,8 +104,8 @@ pub fn handle_list(args: ListArgs) -> Result<(), DionError> {
     }
 
     if args.json {
-        let json_str = serde_json::to_string(&items)
-            .map_err(|e| DionError::MalformedEntry(e.to_string()))?;
+        let json_str =
+            serde_json::to_string(&items).map_err(|e| DionError::MalformedEntry(e.to_string()))?;
         print!("{json_str}{EOL}");
         return Ok(());
     }
@@ -116,7 +135,7 @@ pub fn handle_list(args: ListArgs) -> Result<(), DionError> {
             print!("{}{}{}{EOL}", item.path, padding, first_line);
             let subsequent_padding = " ".repeat(col2_offset);
             for next_line in lines {
-                print!("{}{}{EOL}", subsequent_padding, next_line);
+                print!("{subsequent_padding}{next_line}{EOL}");
             }
         }
     }
@@ -168,7 +187,7 @@ fn scan_recursive(
         #[cfg(windows)]
         {
             use std::os::windows::fs::MetadataExt;
-            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x00000400;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
             if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
                 continue;
             }

@@ -30,7 +30,7 @@ fn test_set_single_line_comment_and_hidden_attribute() {
         let metadata = fs::metadata(&ion_path).unwrap();
         let attrs = metadata.file_attributes();
         assert_ne!(
-            attrs & 0x00000002,
+            attrs & 0x0000_0002,
             0,
             "descript.ion must have FILE_ATTRIBUTE_HIDDEN attribute"
         );
@@ -92,7 +92,9 @@ fn test_set_multi_line_comment_compliance_and_lossless_roundtrip() {
         .arg("multi target.txt")
         .assert()
         .success()
-        .stdout(predicate::str::diff("第一行\r\n第二行\\带反斜杠\r\n第三行\r\n"))
+        .stdout(predicate::str::diff(
+            "第一行\r\n第二行\\带反斜杠\r\n第三行\r\n",
+        ))
         .stderr(predicate::str::is_empty());
 }
 
@@ -139,7 +141,7 @@ fn test_set_case_insensitive_in_place_update_and_order_preservation() {
     let ion_path = dir.path().join("descript.ion");
     let mut initial = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
     initial.extend_from_slice(b"alpha.txt \xE5\xA4\x87\xE6\xB3\xA81\r\n"); // 备注1
-    initial.extend_from_slice(b"beta.txt \xE5\xA4\x87\xE6\xB3\xA82\r\n");  // 备注2
+    initial.extend_from_slice(b"beta.txt \xE5\xA4\x87\xE6\xB3\xA82\r\n"); // 备注2
     initial.extend_from_slice(b"gamma.txt \xE5\xA4\x87\xE6\xB3\xA83\r\n"); // 备注3
     fs::write(&ion_path, initial).unwrap();
 
@@ -177,12 +179,18 @@ fn test_set_case_insensitive_in_place_update_and_order_preservation() {
 
     // 应该有 4 个 entry
     assert_eq!(lines.len(), 4);
-    assert!(lines[0].starts_with("alpha.txt "), "Line 1 must remain alpha.txt");
+    assert!(
+        lines[0].starts_with("alpha.txt "),
+        "Line 1 must remain alpha.txt"
+    );
     assert!(
         lines[1].starts_with("beta.txt ") && lines[1].ends_with("更新后的备注2"),
         "Line 2 must be in-place updated beta.txt"
     );
-    assert!(lines[2].starts_with("gamma.txt "), "Line 3 must remain gamma.txt");
+    assert!(
+        lines[2].starts_with("gamma.txt "),
+        "Line 3 must remain gamma.txt"
+    );
     assert!(
         lines[3].starts_with("delta.txt ") && lines[3].ends_with("新增备注4"),
         "Line 4 must be newly appended delta.txt"
@@ -203,7 +211,8 @@ fn test_set_case_insensitive_in_place_update_and_order_preservation() {
 fn test_set_exceeding_4096_bytes_rejected_with_exit_code_3() {
     let dir = tempdir().unwrap();
     let ion_path = dir.path().join("descript.ion");
-    let initial_content = b"\xEF\xBB\xBF\r\nexisting.txt \xE5\x8E\x9F\xE5\xA7\x8B\xE5\xA4\x87\xE6\xB3\xA8\r\n";
+    let initial_content =
+        b"\xEF\xBB\xBF\r\nexisting.txt \xE5\x8E\x9F\xE5\xA7\x8B\xE5\xA4\x87\xE6\xB3\xA8\r\n";
     fs::write(&ion_path, initial_content).unwrap();
 
     // 构造单行超长内容：entry_name + ' ' + payload + '\r\n' > 4096 bytes
@@ -526,7 +535,9 @@ fn test_set_editor_interactive_flow_via_mock_editor() {
         .arg("file.txt")
         .assert()
         .success()
-        .stdout(predicate::str::diff("编辑器写入的第一行\r\n编辑器写入的第二行\r\n\r\n"));
+        .stdout(predicate::str::diff(
+            "编辑器写入的第一行\r\n编辑器写入的第二行\r\n\r\n",
+        ));
 }
 
 #[test]
@@ -658,7 +669,3 @@ fn test_set_editor_does_not_lock_descript_ion_during_session() {
         .success()
         .stdout(predicate::str::diff("updated_content\r\n\r\n"));
 }
-
-
-
-

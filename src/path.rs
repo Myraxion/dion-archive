@@ -1,13 +1,28 @@
+//! 目标路径词法解析与归一化模块。
+//!
+//! 将用户输入的相对/绝对路径解析为父目录路径 (`parent_dir`) 与基名 (`entry_name`)，
+//! 并确保父目录下的 `descript.ion` 可被正确定位。
+
 use std::path::{Component, Path, PathBuf};
+
 use crate::error::DionError;
 
+/// 解析归一化后的路径目标信息。
 #[derive(Debug, PartialEq, Eq)]
 pub struct TargetResolved {
+    /// 目标所在父目录路径（包含 `descript.ion`）
     pub parent_dir: PathBuf,
+    /// 目标文件的纯条目名称（存储在 `descript.ion` 的 key）
     pub entry_name: String,
+    /// 用户传入的原始路径字符串
     pub target_path: String,
 }
 
+/// 将用户传入的路径字符串纯词法归一化并解析为目标与父目录。
+///
+/// # Errors
+///
+/// - 如果路径为空字符串或经过 `..` 归一化后无法得到合法文件名，返回 [`DionError::InvalidPath`]。
 pub fn resolve_target(raw_path: &str) -> Result<TargetResolved, DionError> {
     if raw_path.trim().is_empty() {
         return Err(DionError::InvalidPath(raw_path.to_string()));

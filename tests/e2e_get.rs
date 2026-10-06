@@ -308,6 +308,7 @@ fn test_get_fixture_real_tc_samples() {
         .arg(env_target.to_str().unwrap())
         .assert()
         .success()
-        .stdout(predicate::str::diff("hhhh\r\n😄\r\n\\n\r\n/n\r\n\\\\n\r\n😢\r\n"));
+        .stdout(predicate::str::diff(
+            "hhhh\r\n😄\r\n\\n\r\n/n\r\n\\\\n\r\n😢\r\n",
+        ));
 }
-

@@ -161,7 +161,10 @@ fn test_unset_removes_last_entry_deletes_physical_file() {
         .success();
 
     // 验证物理 descript.ion 文件已被自动物理删除
-    assert!(!ion_path.exists(), "descript.ion must be removed when all entries are deleted");
+    assert!(
+        !ion_path.exists(),
+        "descript.ion must be removed when all entries are deleted"
+    );
 
     // 2. 有多个条目，删除其中一个条目，文件应保留且顺序保持
     let mut multi = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
@@ -178,7 +181,10 @@ fn test_unset_removes_last_entry_deletes_physical_file() {
         .assert()
         .success();
 
-    assert!(ion_path.exists(), "descript.ion must still exist when remaining entries are present");
+    assert!(
+        ion_path.exists(),
+        "descript.ion must still exist when remaining entries are present"
+    );
     let content = fs::read(&ion_path).unwrap();
     let text = String::from_utf8(content[5..].to_vec()).unwrap();
     let lines: Vec<&str> = text
@@ -232,7 +238,10 @@ fn test_set_empty_or_whitespace_comment_triggers_unset() {
         .assert()
         .success();
 
-    assert!(!ion_path.exists(), "set with empty string should unset and clean up empty descript.ion");
+    assert!(
+        !ion_path.exists(),
+        "set with empty string should unset and clean up empty descript.ion"
+    );
 
     // 场景 2: 多条目，通过 set "   \t  " 移除指定条目，保留其他条目
     let mut multi = Vec::from(b"\xEF\xBB\xBF\r\n" as &[u8]);
@@ -315,7 +324,3 @@ fn test_unset_missing_arg_exit_code_2() {
     let mut cmd = Command::cargo_bin("dion").unwrap();
     cmd.arg("unset").assert().code(2);
 }
-
-
-
-

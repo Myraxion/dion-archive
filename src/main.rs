@@ -1,3 +1,7 @@
+//! Dion 主入口与命令分发。
+//!
+//! Windows 原生 Total Commander UTF-8 `descript.ion` 命令行实用程序。
+
 mod cli;
 mod codec;
 mod error;
@@ -6,14 +10,16 @@ mod list;
 mod path;
 mod storage;
 
+use std::fs;
+use std::io::ErrorKind;
+
 use clap::Parser;
+use serde::Serialize;
+
 use cli::{resolve_set_input_source, Cli, Commands, GetArgs, SetArgs, SetInputSource, UnsetArgs};
 use codec::{decode_comment, encode_comment, IonFile, EOL};
 use error::DionError;
 use path::resolve_target;
-use serde::Serialize;
-use std::fs;
-use std::io::ErrorKind;
 
 #[derive(Serialize)]
 struct JsonComment<'a> {
@@ -52,8 +58,8 @@ fn handle_get(args: GetArgs) -> Result<(), DionError> {
             name: &target.entry_name,
             comment: &decoded,
         };
-        let json_str = serde_json::to_string(&obj)
-            .map_err(|e| DionError::MalformedEntry(e.to_string()))?;
+        let json_str =
+            serde_json::to_string(&obj).map_err(|e| DionError::MalformedEntry(e.to_string()))?;
         print!("{json_str}{EOL}");
     } else {
         print!("{decoded}{EOL}");
@@ -72,11 +78,7 @@ fn load_or_init_ion(path: &std::path::Path) -> Result<IonFile, DionError> {
 }
 
 fn handle_set(args: SetArgs) -> Result<(), DionError> {
-    let source = resolve_set_input_source(
-        args.comment.as_deref(),
-        args.stdin,
-        args.edit,
-    )?;
+    let source = resolve_set_input_source(args.comment.as_deref(), args.stdin, args.edit)?;
 
     let target = resolve_target(&args.target_path)?;
     let ion_path = target.parent_dir.join("descript.ion");
@@ -104,7 +106,7 @@ fn handle_set(args: SetArgs) -> Result<(), DionError> {
     };
 
     if comment.trim().is_empty() {
-        return handle_unset(UnsetArgs {
+        return handle_unset(&UnsetArgs {
             target_path: args.target_path,
         });
     }
@@ -120,7 +122,7 @@ fn handle_set(args: SetArgs) -> Result<(), DionError> {
     Ok(())
 }
 
-fn handle_unset(args: UnsetArgs) -> Result<(), DionError> {
+fn handle_unset(args: &UnsetArgs) -> Result<(), DionError> {
     let target = resolve_target(&args.target_path)?;
     let ion_path = target.parent_dir.join("descript.ion");
 
@@ -147,8 +149,8 @@ fn run(cli: Cli) -> Result<(), DionError> {
     match cli.command {
         Commands::Get(args) => handle_get(args),
         Commands::Set(args) => handle_set(args),
-        Commands::Unset(args) => handle_unset(args),
-        Commands::List(args) => list::handle_list(args),
+        Commands::Unset(args) => handle_unset(&args),
+        Commands::List(args) => list::handle_list(&args),
     }
 }
 

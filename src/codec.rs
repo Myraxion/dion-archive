@@ -1,5 +1,10 @@
-use crate::error::DionError;
+//! Total Commander `descript.ion` 编解码模块。
+//!
+//! 提供 UTF-8 编码格式下的单行与多行备注解析、编码、转义及文件条目管理。
+
 use std::borrow::Cow;
+
+use crate::error::DionError;
 
 pub const TC_HEADER: &[u8] = b"\xEF\xBB\xBF\r\n";
 pub const TC_TAIL: &str = "\x04\u{00c2}";
@@ -9,18 +14,23 @@ pub const EOL: &str = "\r\n";
 #[cfg(not(windows))]
 pub const EOL: &str = "\n";
 
+/// 表示 `descript.ion` 文件中的单个文件/目录备注条目。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IonEntry {
+    /// 目标文件名或目录名（若含空格则物理存储时带引号）
     pub entry_name: String,
+    /// 原始编码形式的备注内容（多行可能含 `\n` 转义和结束标志）
     pub raw_comment: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 维护一个 `descript.ion` 文件中所有条目的内存模型。
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IonFile {
     pub entries: Vec<IonEntry>,
 }
 
 impl IonFile {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -111,23 +121,27 @@ impl IonFile {
     }
 }
 
+/// 解析单行 `descript.ion` 条目。
+///
+/// # Errors
+///
+/// - 如果引号未闭合或引号后缺少空格分隔符，返回 [`DionError::MalformedEntry`]。
 pub fn parse_entry_line(line: &str) -> Result<IonEntry, DionError> {
-    if line.starts_with('"') {
-        let chars = line[1..].char_indices();
+    if let Some(stripped_line) = line.strip_prefix('"') {
+        let chars = stripped_line.char_indices();
         let mut closing_idx = None;
         for (idx, ch) in chars {
             if ch == '"' {
-                closing_idx = Some(idx + 1);
+                closing_idx = Some(idx);
                 break;
             }
         }
 
-        let end = closing_idx.ok_or_else(|| {
-            DionError::MalformedEntry(format!("unclosed quote in line: {line}"))
-        })?;
+        let end = closing_idx
+            .ok_or_else(|| DionError::MalformedEntry(format!("unclosed quote in line: {line}")))?;
 
-        let name = &line[1..end];
-        let remainder = &line[end + 1..];
+        let name = &stripped_line[..end];
+        let remainder = &stripped_line[end + 1..];
 
         let raw_comment = if remainder.is_empty() {
             ""
@@ -156,6 +170,11 @@ pub fn parse_entry_line(line: &str) -> Result<IonEntry, DionError> {
     }
 }
 
+/// 将条目格式化为写入 `descript.ion` 的单行物理存储文本。
+///
+/// # Errors
+///
+/// - 如果格式化后的单行字节数超过 4096 字节，返回 [`DionError::LineTooLong`]。
 pub fn format_entry_line(entry_name: &str, raw_comment: &str) -> Result<String, DionError> {
     let mut line = String::new();
     if entry_name.contains(' ') {
@@ -169,21 +188,22 @@ pub fn format_entry_line(entry_name: &str, raw_comment: &str) -> Result<String, 
     line.push_str(raw_comment);
     line.push_str("\r\n");
 
-    if line.as_bytes().len() > 4096 {
-        return Err(DionError::LineTooLong(
-            entry_name.to_string(),
-            line.as_bytes().len(),
-        ));
+    if line.len() > 4096 {
+        return Err(DionError::LineTooLong(entry_name.to_string(), line.len()));
     }
     Ok(line)
 }
 
+/// 对多行备注进行 Total Commander 兼容编码转义。
+///
+/// 单行文本保持原样，多行文本将 `\` 转义为 `\\`、换行转义为 `\n`，并在末尾追加 TC 结束标示符。
+#[must_use]
 pub fn encode_comment(comment: &str) -> String {
     if !comment.contains(['\r', '\n']) {
         return comment.to_string();
     }
 
-    let mut encoded = String::new();
+    let mut encoded = String::with_capacity(comment.len() + 16);
     let mut chars = comment.chars().peekable();
     while let Some(ch) = chars.next() {
         match ch {
@@ -211,7 +231,12 @@ pub fn encode_comment(comment: &str) -> String {
     encoded
 }
 
-pub fn decode_comment<'a>(raw: &'a str) -> Cow<'a, str> {
+/// 解码 `descript.ion` 中存储的原始备注。
+///
+/// 若为普通单行文本，零拷贝返回借用的 [`Cow::Borrowed`]；
+/// 若为多行转义文本，则反转义并返回 [`Cow::Owned`]。
+#[must_use]
+pub fn decode_comment(raw: &str) -> Cow<'_, str> {
     if let Some(payload) = raw.strip_suffix(TC_TAIL) {
         let mut decoded = String::with_capacity(payload.len());
         let mut chars = payload.chars().peekable();

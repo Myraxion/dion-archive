@@ -294,7 +294,13 @@ fn test_list_recursive_does_not_cross_junction() {
     // 在 scan_root 下创建指向 outside_dir 的 Junction
     let link_path = scan_root.join("linked_dir");
     let output = std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J", link_path.to_str().unwrap(), outside_dir.to_str().unwrap()])
+        .args([
+            "/C",
+            "mklink",
+            "/J",
+            link_path.to_str().unwrap(),
+            outside_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("failed to execute mklink command");
 
