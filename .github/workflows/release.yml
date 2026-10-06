@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Build & Publish Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Prepare release binary & checksum
+        shell: pwsh
+        run: |
+          Copy-Item target/release/dion.exe ./dion.exe
+          $hash = (Get-FileHash -Algorithm SHA256 ./dion.exe).Hash.ToLower()
+          "$hash  dion.exe" | Out-File -Encoding utf8 "dion.exe.sha256"
+
+      - name: Upload binary to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dion.exe
+            dion.exe.sha256
+          generate_release_notes: true
