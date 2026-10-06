@@ -2,6 +2,7 @@ mod cli;
 mod codec;
 mod error;
 mod input;
+mod list;
 mod path;
 mod storage;
 
@@ -147,6 +148,7 @@ fn run(cli: Cli) -> Result<(), DionError> {
         Commands::Get(args) => handle_get(args),
         Commands::Set(args) => handle_set(args),
         Commands::Unset(args) => handle_unset(args),
+        Commands::List(args) => list::handle_list(args),
     }
 }
 
@@ -154,7 +156,7 @@ fn main() {
     let cli = Cli::parse();
     let quiet = match &cli.command {
         Commands::Get(args) => args.quiet,
-        Commands::Set(_) | Commands::Unset(_) => false,
+        Commands::Set(_) | Commands::Unset(_) | Commands::List(_) => false,
     };
 
     if let Err(err) = run(cli) {

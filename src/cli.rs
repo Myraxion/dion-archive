@@ -19,6 +19,25 @@ pub enum Commands {
     /// Remove comment for a target file or directory
     #[command(alias = "rm", alias = "del")]
     Unset(UnsetArgs),
+
+    /// List comments in a directory or recursively
+    #[command(alias = "ls")]
+    List(ListArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ListArgs {
+    /// Target directory to scan (defaults to current directory '.')
+    #[arg(default_value = ".")]
+    pub dir: String,
+
+    /// Scan subdirectories recursively (does not cross symlinks or junctions)
+    #[arg(short = 'r', long = "recursive")]
+    pub recursive: bool,
+
+    /// Output as structured JSON array
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(clap::Args, Debug)]
